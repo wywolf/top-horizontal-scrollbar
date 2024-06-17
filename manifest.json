@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "横向进度条",
+    "version": "1.0",
+    "permissions": ["activeTab", "storage"],
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content.js"],
+            "css": ["progress.css"]
+        }
+    ]
+}
