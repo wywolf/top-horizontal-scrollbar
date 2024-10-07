@@ -45,7 +45,7 @@
             const scrollBtns = document.createElement('div');
             scrollBtns.className = 'scroll-buttons';
             scrollBtns.style.cssText = `
-                position: fixed; bottom: 10px; right: 5rem; z-index: 1000000000; display: none;
+                position: fixed; bottom: 10px; right: 5rem; z-index: 99999999999; display: none;
             `;
 
             // 创建顶部和最新按钮
