@@ -38,6 +38,14 @@
         constructor() {
             this._visible = false;
             this.buttons = this._createButtons();
+            this.scrollableElements = new Set(); // 新增：存储可滚动元素
+            this._initMutationObserver(); // 新增：初始化DOM观察器
+            
+            // 添加页面加载完成的监听
+            window.addEventListener('load', () => {
+                console.log('%c页面加载完成，滚动条已就绪', 'color: red; font-size: 20px');
+                this._detectScrollableElements();
+            });
         }
 
         // 创建滚动按钮
@@ -66,15 +74,70 @@
 
         // 更新按钮的显示状态
         update(scrollTop) {
-            const showScrollButtons = maxScroll > 0;
+            // 优化：考虑所有可滚动元素的状态
+            const showScrollButtons = Array.from(this.scrollableElements).some(el =>
+                el.scrollHeight > el.clientHeight
+            ) || maxScroll > 0;
+
             if (this._visible !== showScrollButtons) {
                 this.buttons.style.display = showScrollButtons ? 'block' : 'none';
                 this._visible = showScrollButtons;
             }
 
-            // 根据滚动位置显示或隐藏按钮
-            this.buttons.children[0].style.display = scrollTop > clientHeight ? 'inline-block' : 'none';
-            this.buttons.children[1].style.display = (scrollTop + clientHeight >= maxScroll) ? 'none' : 'inline-block';
+            // 优化：更精确的按钮显示逻辑
+            const topButton = this.buttons.children[0];
+            const bottomButton = this.buttons.children[1];
+
+            // 顶部按钮显示逻辑
+            topButton.style.display = scrollTop > 100 ? 'inline-block' : 'none';
+
+            // 底部按钮显示逻辑
+            bottomButton.style.display = (maxScroll - scrollTop > 100) ? 'inline-block' : 'none';
+        }
+
+        // 新增：初始化DOM观察器
+        _initMutationObserver() {
+            const observer = new MutationObserver(() => {
+                // 优化：增加防抖，避免频繁触发
+                debounce(() => this._detectScrollableElements(), 100);
+            });
+
+            // 优化：增加更具体的配置
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['style', 'class'] // 只监听可能影响滚动的属性
+            });
+        }
+
+        // 新增：检测可滚动元素
+        _detectScrollableElements() {
+            const elements = document.querySelectorAll('*');
+            elements.forEach(el => {
+                // 优化：增加更多的滚动容器判断条件
+                const computedStyle = window.getComputedStyle(el);
+                const hasVerticalScroll = (
+                    el.scrollHeight > el.clientHeight &&
+                    (computedStyle.overflowY === 'auto' ||
+                        computedStyle.overflowY === 'scroll' ||
+                        computedStyle.overflow === 'auto' ||
+                        computedStyle.overflow === 'scroll')
+                );
+
+                if (hasVerticalScroll && !this.scrollableElements.has(el)) {
+                    this.scrollableElements.add(el);
+                    this._addScrollListener(el);
+                }
+            });
+        }
+
+        // 新增：为可滚动元素添加滚动监听
+        _addScrollListener(element) {
+            element.addEventListener('scroll', () => {
+                const progress = (element.scrollTop / (element.scrollHeight - element.clientHeight)) * 100;
+                progressBar.update(progress);
+            }, { passive: true });
         }
     }
 
@@ -177,6 +240,7 @@
         updatePageDimensions();
         updateUI();
         addListeners();
+        scrollButtons._detectScrollableElements(); // 新增：初始检测可滚动元素
     }
 
     // 执行初始化
