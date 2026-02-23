@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "圆圈进度条",
+  "version": "1.0",
+  "description": "在网页右下角悬浮显示环形的滚动阅读百分比进度条。",
+  "author": "Leo",
+  "homepage_url": "https://github.com/wywolf/top-horizontal-scrollbar",
+  "permissions": ["activeTab", "storage"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["progress.css"]
+    }
+  ]
+}
