@@ -6,6 +6,11 @@
   "author": "Leo",
   "homepage_url": "https://github.com/wywolf/top-horizontal-scrollbar",
   "permissions": ["activeTab", "storage"],
+  "icons": {
+    "16": "assets/icon_16.png",
+    "48": "assets/icon_48.png",
+    "128": "assets/icon_128.png"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

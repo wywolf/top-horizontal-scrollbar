@@ -5,6 +5,11 @@
   "description": "在网页顶部显示横向的滚动阅读进度条，直观掌握长文阅读进度。",
   "author": "Leo",
   "homepage_url": "https://github.com/wywolf/top-horizontal-scrollbar",
+  "icons": {
+    "16": "assets/icon_16.png",
+    "48": "assets/icon_48.png",
+    "128": "assets/icon_128.png"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
