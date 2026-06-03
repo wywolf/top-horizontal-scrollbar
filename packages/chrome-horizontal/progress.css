@@ -21,6 +21,10 @@
   display: none;
   align-items: center;
   gap: 12px;
+  /* 拖拽时禁止选中文字和触屏默认滚动，并用 move 光标提示可移动 */
+  user-select: none;
+  touch-action: none;
+  cursor: move;
 }
 
 .scroll-button {
