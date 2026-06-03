@@ -135,6 +135,7 @@
     update(scrollState) {
       const { scrollTop, maxScroll: activeMaxScroll } = scrollState;
       const showScrollButtons = this.scrollableElements.size > 0 || maxScroll > 0;
+      const previousDisplay = this.buttons.style.display;
 
       if (this._visible !== showScrollButtons) {
         this.buttons.style.display = showScrollButtons ? "flex" : "none";
@@ -146,12 +147,25 @@
 
       if (!topButton || !bottomButton) return;
 
+      const previousTopDisplay = topButton.style.display;
+      const previousBottomDisplay = bottomButton.style.display;
+
       // 顶部按钮：向下滚动超过一定距离后显示
       topButton.style.display = scrollTop > 100 ? "inline-flex" : "none";
 
       // 最新按钮：距离底部超过一定距离后显示
       bottomButton.style.display =
         activeMaxScroll - scrollTop > 100 ? "inline-flex" : "none";
+
+      const displayChanged =
+        previousDisplay !== this.buttons.style.display ||
+        previousTopDisplay !== topButton.style.display ||
+        previousBottomDisplay !== bottomButton.style.display;
+
+      if (displayChanged) {
+        // 按钮数量变化会改变容器宽度，需要按新尺寸重新压回可视区域
+        this._keepInViewport(true);
+      }
     }
 
     /**
@@ -244,18 +258,28 @@
       // 浏览器窗口变化时，防止按钮跑出屏幕
       window.addEventListener(
         "resize",
-        debounce(() => {
-          const rect = this.buttons.getBoundingClientRect();
-          const safePosition = this._getSafePosition(rect.left, rect.top);
-
-          this.buttons.style.left = `${safePosition.left}px`;
-          this.buttons.style.top = `${safePosition.top}px`;
-          this.buttons.style.right = "auto";
-          this.buttons.style.bottom = "auto";
-
-          this._savePosition(safePosition);
-        }, 100)
+        debounce(() => this._keepInViewport(true), 100)
       );
+    }
+
+    /**
+     * 使用当前按钮容器尺寸修正位置；按钮显隐或窗口变化后都需要调用
+     */
+    _keepInViewport(savePosition = false) {
+      if (this._isDragging || this.buttons.style.display === "none") return;
+
+      const rect = this.buttons.getBoundingClientRect();
+      const safePosition = this._getSafePosition(rect.left, rect.top);
+
+      this.buttons.style.left = `${safePosition.left}px`;
+      this.buttons.style.top = `${safePosition.top}px`;
+      this.buttons.style.right = "auto";
+      this.buttons.style.bottom = "auto";
+
+      if (savePosition && (safePosition.left !== rect.left || safePosition.top !== rect.top)) {
+        // 只有确实发生修正时才保存，避免滚动过程中频繁覆盖用户位置
+        this._savePosition(safePosition);
+      }
     }
 
     /**
