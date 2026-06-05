@@ -51,6 +51,12 @@
       this._visible = false;
       this.buttons = this._createButtons();
 
+      // 按钮距离浏览器边缘的安全距离，避免被右侧滚动条遮挡
+      this._safeGap = 12;
+
+      // 拖拽相关状态：记录起点和容器位置，用于计算拖动偏移量
+      this._isDragging = false;
+
       // 拖拽相关状态：记录起点和容器位置，用于计算拖动偏移量
       this._isDragging = false;
       this._dragMoved = false;
@@ -58,6 +64,7 @@
       this._dragStartY = 0;
       this._startLeft = 0;
       this._startTop = 0;
+      this._positionReady = false;
 
       // 可滚动元素集合
       this.scrollableElements = new Set();
@@ -73,13 +80,14 @@
 
       // 初始化拖拽能力，并优先恢复用户上次拖动后保存的位置
       this._enableDrag();
-      this._restorePosition();
+      this._restorePosition(() => {
+        updateUI(true);
+      });
 
       window.addEventListener("load", () => {
         this._detectScrollableElements(document.body);
         updatePageDimensions();
         updateUI(true);
-        this._restorePosition();
       });
     }
 
@@ -134,7 +142,9 @@
     // 更新按钮显示状态
     update(scrollState) {
       const { scrollTop, maxScroll: activeMaxScroll } = scrollState;
-      const showScrollButtons = this.scrollableElements.size > 0 || maxScroll > 0;
+      const showScrollButtons =
+        this._positionReady &&
+        (this.scrollableElements.size > 0 || maxScroll > 0);
       const previousDisplay = this.buttons.style.display;
 
       if (this._visible !== showScrollButtons) {
@@ -258,7 +268,7 @@
       // 浏览器窗口变化时，防止按钮跑出屏幕
       window.addEventListener(
         "resize",
-        debounce(() => this._keepInViewport(true), 100)
+        debounce(() => this._keepInViewport(true), 100),
       );
     }
 
@@ -266,7 +276,12 @@
      * 使用当前按钮容器尺寸修正位置；按钮显隐或窗口变化后都需要调用
      */
     _keepInViewport(savePosition = false) {
-      if (this._isDragging || this.buttons.style.display === "none") return;
+      if (
+        this._isDragging ||
+        window.getComputedStyle(this.buttons).display === "none"
+      ) {
+        return;
+      }
 
       const rect = this.buttons.getBoundingClientRect();
       const safePosition = this._getSafePosition(rect.left, rect.top);
@@ -276,7 +291,10 @@
       this.buttons.style.right = "auto";
       this.buttons.style.bottom = "auto";
 
-      if (savePosition && (safePosition.left !== rect.left || safePosition.top !== rect.top)) {
+      if (
+        savePosition &&
+        (safePosition.left !== rect.left || safePosition.top !== rect.top)
+      ) {
         // 只有确实发生修正时才保存，避免滚动过程中频繁覆盖用户位置
         this._savePosition(safePosition);
       }
@@ -288,12 +306,22 @@
     _getSafePosition(left, top) {
       const rect = this.buttons.getBoundingClientRect();
 
-      const maxLeft = window.innerWidth - rect.width;
-      const maxTop = window.innerHeight - rect.height;
+      // 计算浏览器右侧滚动条宽度
+      const scrollbarWidth =
+        window.innerWidth - document.documentElement.clientWidth;
+
+      // 四周预留安全距离，尤其是右侧要避开滚动条
+      const minLeft = this._safeGap;
+      const minTop = this._safeGap;
+
+      const maxLeft =
+        window.innerWidth - scrollbarWidth - rect.width - this._safeGap;
+
+      const maxTop = window.innerHeight - rect.height - this._safeGap;
 
       return {
-        left: Math.min(Math.max(0, left), Math.max(0, maxLeft)),
-        top: Math.min(Math.max(0, top), Math.max(0, maxTop)),
+        left: Math.min(Math.max(minLeft, left), Math.max(minLeft, maxLeft)),
+        top: Math.min(Math.max(minTop, top), Math.max(minTop, maxTop)),
       };
     }
 
@@ -323,28 +351,39 @@
     /**
      * 恢复按钮位置：读取用户上次保存的坐标，并重新应用到按钮容器
      */
-    _restorePosition() {
-      const applyPosition = (position) => {
-        // 存储数据异常时直接忽略，避免影响按钮显示和滚动功能
-        if (
-          !position ||
-          typeof position.left !== "number" ||
-          typeof position.top !== "number"
-        ) {
-          return;
-        }
+    _restorePosition(onDone) {
+      const finish = () => {
+        this._positionReady = true;
 
+        if (typeof onDone === "function") {
+          onDone();
+        }
+      };
+
+      const applyPosition = (position) => {
         requestAnimationFrame(() => {
+          // 存储数据异常时直接忽略，避免影响按钮显示和滚动功能
+          if (
+            !position ||
+            typeof position.left !== "number" ||
+            typeof position.top !== "number"
+          ) {
+            finish();
+            return;
+          }
+
           // 等浏览器完成布局后再计算边界，避免刚插入 DOM 时宽高不准确
           const safePosition = this._getSafePosition(
             position.left,
-            position.top
+            position.top,
           );
 
           this.buttons.style.left = `${safePosition.left}px`;
           this.buttons.style.top = `${safePosition.top}px`;
           this.buttons.style.right = "auto";
           this.buttons.style.bottom = "auto";
+
+          finish();
         });
       };
 
@@ -359,13 +398,17 @@
         });
       } else {
         const raw = localStorage.getItem("scrollButtonsPosition");
-        if (!raw) return;
+        if (!raw) {
+          applyPosition(null);
+          return;
+        }
 
         try {
           applyPosition(JSON.parse(raw));
         } catch (error) {
           // 清理损坏的本地数据，避免后续每次恢复都重复解析失败
           localStorage.removeItem("scrollButtonsPosition");
+          applyPosition(null);
         }
       }
     }
@@ -540,7 +583,7 @@
     if (scroller) {
       const elementMaxScroll = Math.max(
         scroller.scrollHeight - scroller.clientHeight,
-        0
+        0,
       );
 
       if (elementMaxScroll > 0) {
@@ -574,7 +617,7 @@
       body.offsetHeight,
       docEl.offsetHeight,
       body.clientHeight,
-      docEl.clientHeight
+      docEl.clientHeight,
     );
 
     if (newPageHeight !== pageHeight || newClientHeight !== clientHeight) {
@@ -690,9 +733,7 @@
   function easeInOutQuad(t, b, c, d) {
     t /= d / 2;
 
-    return t < 1
-      ? (c / 2) * t * t + b
-      : (-c / 2) * (--t * (t - 2) - 1) + b;
+    return t < 1 ? (c / 2) * t * t + b : (-c / 2) * (--t * (t - 2) - 1) + b;
   }
 
   /**
